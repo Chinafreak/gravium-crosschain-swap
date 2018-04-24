@@ -17,7 +17,7 @@
   },
   "homepage": "https://github.com/Gravium/gravium-crosschain-swap#readme",
   "dependencies": {
-    "gravium": "^3.0.1",
+    "gravium": "^1.0.0",
     "express": "^4.13.4"
   }
 }
