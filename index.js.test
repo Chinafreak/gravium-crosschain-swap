@@ -3,7 +3,6 @@ const gravium = require('gravium')
 const app = express()
 
 app.get('/', function (req, res) {
-  res.send('Hello Gravium Community')
 
   const client = new gravium.Client({
     host: 'localhost',
@@ -15,7 +14,7 @@ app.get('/', function (req, res) {
 
   client.getBalance('*', 6, function(err, balance, resHeaders) {
     if (err) return console.log(err)
-      res.status(200).send('Balance: ' + balance)
+    res.status(200).send('Balance: ' + balance)
   })
 })
 
