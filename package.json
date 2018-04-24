@@ -1,0 +1,23 @@
+{
+  "name": "gravium-crosschain-swap",
+  "version": "1.0.0",
+  "description": "Nodejs crosschain app for gravium",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Gravium/gravium-crosschain-swap.git"
+  },
+  "author": "216k155",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Gravium/gravium-crosschain-swap/issues"
+  },
+  "homepage": "https://github.com/Gravium/gravium-crosschain-swap#readme",
+  "dependencies": {
+    "gravium": "^3.0.1",
+    "express": "^4.13.4"
+  }
+}
