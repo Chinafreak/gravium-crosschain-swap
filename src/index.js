@@ -32,14 +32,14 @@ const remoteGravium2Client = new Client({
 })
 
 localGravium1Client.getInfo().then((info) => getUnspent(info)).error((err) => {
-writeLog('001', 'failed getInfo', err)
+    writeLog('001', 'failed getInfo', err)
 })
 
 const getUnspent = (info) => {
     console.log('localGravium1Client', info)
     localGravium1Client.listUnspent().then((unspent) => filterUnspent(unspent)).error((err) => {
-    +    writeLog('002', 'failed listUnspent', err)
-    +  })
+        writeLog('002', 'failed listUnspent', err)
+})
 }
 
 const filterUnspent = (unspent) => {
@@ -61,14 +61,24 @@ const processTransaction = (pending) => {
 
     localGravium1Client.getTransaction(pending.txid).then((fullTrans) => {
         console.log('gettransaction', fullTrans)
-    const Gravium2UserAddress = fullTrans['tx-comment']
-    remoteGravium2Client.validateAddress(Gravium2UserAddress).then((addressInfo) => {
+    const gravium2UserAddress = fullTrans['tx-comment']
+    validateGravium2Address(gravium2UserAddress, pending, fullTrans)
+}).error((err) => {
+        writeLog('003', 'failed gettransaction', {
+        error: err,
+            pending,
+    })
+})
+}
+
+const validateGravium2Address = (gravium2UserAddress, pending, fullTrans) => {
+    remoteGravium2Client.validateAddress(gravium2UserAddress).then((addressInfo) => {
         console.log('validateaddress', addressInfo)
     if (addressInfo.isValid) {
-        sendGravium2(Gravium2UserAddress, pending)
+        sendGravium2(gravium2UserAddress, pending)
     } else {
         writeLog('005', 'invalid address', {
-            Gravium2UserAddress,
+            gravium2UserAddress,
             pending,
             fullTrans,
         })
@@ -81,26 +91,19 @@ const processTransaction = (pending) => {
             fullTrans,
     })
 })
-}).error((err) => {
-        writeLog('003', 'failed gettransaction', {
-        error: err,
-            pending,
-    })
-})
 }
 
-const sendGravium2 = (Gravium2UserAddress, pending) => {
-    console.log('sendGravium2', pending, Gravium2UserAddress)
+const sendGravium2 = (gravium2UserAddress, pending) => {
+    console.log('sendGravium2', pending, gravium2UserAddress)
 
-    remoteGravium2Client.sendToAddress(Gravium2UserAddress, pending.amount).then((sendOutcome) => {
+    remoteGravium2Client.sendToAddress(gravium2UserAddress, pending.amount).then((sendOutcome) => {
         console.log('sendOutcome', sendOutcome)
-    // @TODO check if successfully sent
     if (sendOutcome.txid) {
         burnGravium1(pending)
     } else {
         writeLog('007', 'failed to send the transaction', {
             pending,
-            Gravium2UserAddress,
+            gravium2UserAddress,
             sendOutcome,
         })
         getOrigin(pending)
@@ -109,7 +112,7 @@ const sendGravium2 = (Gravium2UserAddress, pending) => {
         writeLog('006', 'failed sendToAddress', {
         error: err,
             pending,
-            Gravium2UserAddress,
+            gravium2UserAddress,
     })
 })
 }
@@ -118,7 +121,7 @@ const burnGravium1 = (pending) => {
     console.log('burnGravium1', pending)
 
     const outgoingTransactions = {}
-    outgoingTransactions[Gravium1BurnAddress] = pending.amount - txFee
+    outgoingTransactions[gravium1BurnAddress] = pending.amount - txFee
 
     const spentTransactions = [{
         txid: pending.txid,
@@ -126,24 +129,8 @@ const burnGravium1 = (pending) => {
     }]
 
     localGravium1Client.createRawTransaction(spentTransactions, outgoingTransactions).then((rawTrans) => {
-        localGravium1Client.signRawTransaction(rawTrans).then((signedRaw) => {
-        localGravium1Client.sendRawTransaction(signedRaw.hex).then((rawOutcome) => {
-        console.log('burnGravium1 rawOutcome', rawOutcome)
-}).error((err) => {
-        writeLog('010', 'failed sendRawTransaction', {
-        error: err,
-            pending,
-            signedRaw,
-    })
-})
-}).error((err) => {
-        writeLog('009', 'failed signRawTransaction', {
-        error: err,
-            pending,
-            rawTrans,
-    })
-})
-}).error((err) => {
+        signBurnTx(rawTrans, pending)
+    }).error((err) => {
         writeLog('008', 'failed createRawTransaction', {
         error: err,
             pending,
@@ -153,11 +140,67 @@ const burnGravium1 = (pending) => {
 })
 }
 
+const signBurnTx = (rawTrans, pending) => {
+    localGravium1Client.signRawTransaction(rawTrans).then((signedRaw) => {
+        sendBurnTx(signedRaw, pending)
+    }).error((err) => {
+        writeLog('009', 'failed signRawTransaction', {
+        error: err,
+            pending,
+            rawTrans,
+    })
+})
+}
+
+const sendBurnTx = (signedRaw, pending) => {
+    localGravium1Client.sendRawTransaction(signedRaw.hex).then((rawOutcome) => {
+        console.log('burnGravium1 rawOutcome', rawOutcome)
+}).error((err) => {
+        writeLog('010', 'failed sendRawTransaction', {
+        error: err,
+            pending,
+            signedRaw,
+    })
+})
+}
+
 const getOrigin = (pending) => {
     localGravium1Client.getRawTransaction(pending.txid).then((incomingRaw) => {
-        localGravium1Client.decodeRawTransaction(incomingRaw).then((incomingTrans) => {
-        localGravium1Client.getRawTransaction(incomingTrans.vin[0].txid).then((inputRaw) => {
-        localGravium1Client.decodeRawTransaction(inputRaw).then((inputTrans) => {
+        decodeOriginRaw(incomingRaw, pending)
+    }).error((err) => {
+        writeLog('011', 'failed getRawTransaction', {
+        error: err,
+            pending,
+    })
+})
+}
+
+const decodeOriginRaw = (incomingRaw, pending) => {
+    localGravium1Client.decodeRawTransaction(incomingRaw).then((incomingTrans) => {
+        getOriginRaw(incomingTrans, pending)
+    }).error((err) => {
+        writeLog('012', 'failed decodeRawTransaction', {
+        error: err,
+            pending,
+            incomingRaw,
+    })
+})
+}
+
+const getOriginRaw = (incomingTrans, pending) => {
+    localGravium1Client.getRawTransaction(incomingTrans.vin[0].txid).then((inputRaw) => {
+        decodeOriginInputRaw(inputRaw, incomingTrans, pending)
+    }).error((err) => {
+        writeLog('013', 'failed getRawTransaction', {
+        error: err,
+            pending,
+            incomingTrans,
+    })
+})
+}
+
+const decodeOriginInputRaw = (inputRaw, incomingTrans, pending) => {
+    localGravium1Client.decodeRawTransaction(inputRaw).then((inputTrans) => {
         const origin = inputTrans.vout[incomingTrans.vin[0].vout].scriptPubKey.addresses[0]
         sendGravium1(origin, pending)
     }).error((err) => {
@@ -165,26 +208,6 @@ const getOrigin = (pending) => {
         error: err,
             pending,
             inputRaw,
-    })
-})
-}).error((err) => {
-        writeLog('013', 'failed getRawTransaction', {
-        error: err,
-            pending,
-            incomingTrans,
-    })
-})
-}).error((err) => {
-        writeLog('012', 'failed decodeRawTransaction', {
-        error: err,
-            pending,
-            incomingRaw,
-    })
-})
-}).error((err) => {
-        writeLog('011', 'failed getRawTransaction', {
-        error: err,
-            pending,
     })
 })
 }
@@ -201,29 +224,37 @@ const sendGravium1 = (origin, pending) => {
     }]
 
     localGravium1Client.createRawTransaction(spentTransactions, outgoingTransactions).then((rawTrans) => {
-        localGravium1Client.signRawTransaction(rawTrans).then((signedRaw) => {
-        localGravium1Client.sendRawTransaction(signedRaw.hex).then((rawOutcome) => {
-        console.log('returnGravium1 rawOutcome', rawOutcome)
-}).error((err) => {
-        writeLog('017', 'failed sendRawTransaction', {
+        signGravium1Raw(rawTrans, pending)
+    }).error((err) => {
+        writeLog('015', 'failed createRawTransaction', {
         error: err,
             pending,
-            signedRaw,
+            spentTransactions,
+            outgoingTransactions,
     })
 })
-}).error((err) => {
+}
+
+const signGravium1Raw = (rawTrans, pending) => {
+    localGravium1Client.signRawTransaction(rawTrans).then((signedRaw) => {
+        sendGravium1Raw(signedRaw, pending)
+    }).error((err) => {
         writeLog('016', 'failed signRawTransaction', {
         error: err,
             pending,
             rawTrans,
     })
 })
+}
+
+const sendGravium1Raw = (signedRaw, pending) => {
+    localGravium1Client.sendRawTransaction(signedRaw.hex).then((rawOutcome) => {
+        console.log('returnGravium1 rawOutcome', rawOutcome)
 }).error((err) => {
-        writeLog('015', 'failed createRawTransaction', {
+        writeLog('017', 'failed sendRawTransaction', {
         error: err,
             pending,
-            spentTransactions,
-            outgoingTransactions,
+            signedRaw,
     })
 })
 }
